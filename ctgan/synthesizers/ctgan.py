@@ -304,21 +304,23 @@ class CTGANSynthesizer(BaseSynthesizer):
             )
 
         if self.first_run:
+            print('First run: fitting data ... ')
             self._validate_discrete_columns(train_data, discrete_columns)
             self._old_transformer = DataTransformer()
             self._old_transformer.fit(train_data, discrete_columns)
-            self.old_train_data = self._transformer.transform(train_data)
+            self.old_train_data = self._old_transformer.transform(train_data)
             self._old_data_sampler = DataSampler(
-                train_data,
-                self._transformer.output_info_list,
+                self.old_train_data,
+                self._old_transformer.output_info_list,
                 self._log_frequency)
-            self.first_run=False
+            self.first_run = False
 
         else:
+            print('Not First run: retrieving old setup.')
             pass
 
         self._transformer = self._old_transformer
-        self._train_data = self.old_train_data
+        train_data = self.old_train_data
         self._data_sampler = self._old_data_sampler
 
         data_dim = self._transformer.output_dimensions
