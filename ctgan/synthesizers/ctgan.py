@@ -176,7 +176,7 @@ class CTGANSynthesizer(BaseSynthesizer):
         self._data_sampler = None
         self._generator = None
         self._discriminator = None
-
+        self.first_run = True
 
     @staticmethod
     def _gumbel_softmax(logits, tau=1, hard=False, eps=1e-10, dim=-1):
@@ -304,7 +304,7 @@ class CTGANSynthesizer(BaseSynthesizer):
             )
 
         if self.first_run:
-            self.validate_discrete_columns(train_data, discrete_columns)
+            self._validate_discrete_columns(train_data, discrete_columns)
             self._old_transformer = DataTransformer()
             self._old_transformer.fit(train_data, discrete_columns)
             self.old_train_data = self._transformer.transform(train_data)
