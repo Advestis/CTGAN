@@ -9,7 +9,7 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 df_real_data = pd.read_csv('./data_set.csv', index_col=0)
 discrete_columns = ['season', 'weekends', 'hour range']
-ctgan = CTGANSynthesizer(epochs=10, cuda=True, verbose=True)
+ctgan = CTGANSynthesizer(epochs=1, cuda=True, verbose=True)
 
 # first call
 ctgan.fit(df_real_data, discrete_columns)
