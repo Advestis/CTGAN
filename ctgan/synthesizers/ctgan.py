@@ -173,7 +173,6 @@ class CTGANSynthesizer(BaseSynthesizer):
         self._device = torch.device(device)
 
         self._transformer = None
-        self._old_transformer = None
         self._data_sampler = None
         self._generator = None
         self._discriminator = None
@@ -294,7 +293,6 @@ class CTGANSynthesizer(BaseSynthesizer):
                 contain the integer indices of the columns. Otherwise, if it is
                 a ``pandas.DataFrame``, this list should contain the column names.
         """
-        self._validate_discrete_columns(train_data, discrete_columns)
 
         if epochs is None:
             epochs = self._epochs
@@ -305,21 +303,23 @@ class CTGANSynthesizer(BaseSynthesizer):
                 DeprecationWarning
             )
 
-        if self._old_transformer is None:
-            print("First call of ctgan: running self._transformer.fit")
-            self._transformer = DataTransformer()
-            self._transformer.fit(train_data, discrete_columns)
-            self._old_transformer = self._transformer
+        if self.first_run:
+            self.validate_discrete_columns(train_data, discrete_columns)
+            self._old_transformer = DataTransformer()
+            self._old_transformer.fit(train_data, discrete_columns)
+            self.old_train_data = self._transformer.transform(train_data)
+            self._old_data_sampler = DataSampler(
+                train_data,
+                self._transformer.output_info_list,
+                self._log_frequency)
+            self.first_run=False
+
         else:
-            print('self._transformer already set. Retrieving the old one.')
-            self._transformer = self._old_transformer
+            pass
 
-        train_data = self._transformer.transform(train_data)
-
-        self._data_sampler = DataSampler(
-            train_data,
-            self._transformer.output_info_list,
-            self._log_frequency)
+        self._transformer = self._old_transformer
+        self._train_data = self.old_train_data
+        self._data_sampler = self._old_data_sampler
 
         data_dim = self._transformer.output_dimensions
 
