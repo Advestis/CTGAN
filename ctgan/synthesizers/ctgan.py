@@ -175,6 +175,8 @@ class CTGANSynthesizer(BaseSynthesizer):
         self._transformer = None
         self._data_sampler = None
         self._generator = None
+        self._discriminator = None
+        self.first_run = True
 
     @staticmethod
     def _gumbel_softmax(logits, tau=1, hard=False, eps=1e-10, dim=-1):
@@ -291,7 +293,6 @@ class CTGANSynthesizer(BaseSynthesizer):
                 contain the integer indices of the columns. Otherwise, if it is
                 a ``pandas.DataFrame``, this list should contain the column names.
         """
-        self._validate_discrete_columns(train_data, discrete_columns)
 
         if epochs is None:
             epochs = self._epochs
@@ -302,15 +303,25 @@ class CTGANSynthesizer(BaseSynthesizer):
                 DeprecationWarning
             )
 
-        self._transformer = DataTransformer()
-        self._transformer.fit(train_data, discrete_columns)
+        if self.first_run:
+            print('First run: fitting data ... ')
+            self._validate_discrete_columns(train_data, discrete_columns)
+            self._old_transformer = DataTransformer()
+            self._old_transformer.fit(train_data, discrete_columns)
+            self.old_train_data = self._old_transformer.transform(train_data)
+            self._old_data_sampler = DataSampler(
+                self.old_train_data,
+                self._old_transformer.output_info_list,
+                self._log_frequency)
+            self.first_run = False
 
-        train_data = self._transformer.transform(train_data)
+        else:
+            print('Not First run: retrieving old setup.')
+            pass
 
-        self._data_sampler = DataSampler(
-            train_data,
-            self._transformer.output_info_list,
-            self._log_frequency)
+        self._transformer = self._old_transformer
+        train_data = self.old_train_data
+        self._data_sampler = self._old_data_sampler
 
         data_dim = self._transformer.output_dimensions
 
@@ -320,7 +331,7 @@ class CTGANSynthesizer(BaseSynthesizer):
             data_dim
         ).to(self._device)
 
-        discriminator = Discriminator(
+        self._discriminator = Discriminator(
             data_dim + self._data_sampler.dim_cond_vec(),
             self._discriminator_dim,
             pac=self.pac
@@ -332,7 +343,7 @@ class CTGANSynthesizer(BaseSynthesizer):
         )
 
         optimizerD = optim.Adam(
-            discriminator.parameters(), lr=self._discriminator_lr,
+            self._discriminator.parameters(), lr=self._discriminator_lr,
             betas=(0.5, 0.9), weight_decay=self._discriminator_decay
         )
 
@@ -374,10 +385,10 @@ class CTGANSynthesizer(BaseSynthesizer):
                         real_cat = real
                         fake_cat = fakeact
 
-                    y_fake = discriminator(fake_cat)
-                    y_real = discriminator(real_cat)
+                    y_fake = self._discriminator(fake_cat)
+                    y_real = self._discriminator(real_cat)
 
-                    pen = discriminator.calc_gradient_penalty(
+                    pen = self._discriminator.calc_gradient_penalty(
                         real_cat, fake_cat, self._device, self.pac)
                     loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
 
@@ -401,9 +412,9 @@ class CTGANSynthesizer(BaseSynthesizer):
                 fakeact = self._apply_activate(fake)
 
                 if c1 is not None:
-                    y_fake = discriminator(torch.cat([fakeact, c1], dim=1))
+                    y_fake = self._discriminator(torch.cat([fakeact, c1], dim=1))
                 else:
-                    y_fake = discriminator(fakeact)
+                    y_fake = self._discriminator(fakeact)
 
                 if condvec is None:
                     cross_entropy = 0
@@ -481,3 +492,6 @@ class CTGANSynthesizer(BaseSynthesizer):
         self._device = device
         if self._generator is not None:
             self._generator.to(self._device)
+        if self._discriminator is not None:
+            self._discriminator.to(self._device)
+
